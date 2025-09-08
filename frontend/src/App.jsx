@@ -1,28 +1,38 @@
-import React, { useState, useMemo } from 'react';
-import { BrowserRouter as Router, Routes, Route, Outlet } from 'react-router-dom';
-import { ThemeProvider } from '@mui/material/styles';
-import CssBaseline from '@mui/material/CssBaseline';
-import getTheme from './theme';
-import Home from './pages/Home';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import Dashboard from './pages/Dashboard';
-import MapView from './pages/MapView';
-import Analytics from './pages/Analytics';
-import ChatbotPage from './pages/ChatbotPage';
-import Layout from './components/Layout';
-import ProtectedRoute from './components/ProtectedRoute';
-import './App.css';
+import React, { useState, useMemo } from "react";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Outlet,
+} from "react-router-dom";
+import { ThemeProvider } from "@mui/material/styles";
+import CssBaseline from "@mui/material/CssBaseline";
+import getTheme from "./theme";
+import Home from "./pages/Home";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import Dashboard from "./pages/Dashboard";
+import MapView from "./pages/MapView";
+import Analytics from "./pages/Analytics";
+import ChatbotPage from "./pages/ChatbotPage";
+import Layout from "./components/Layout";
+import ProtectedRoute from "./components/ProtectedRoute";
+import Landing from "./pages/Landing";
+import SenderDashboard from "./pages/SenderDashboard";
+import ReceiverDashboard from "./pages/ReceiverDashboard";
+import CourierDashboard from "./pages/CourierDashboard";
+import AdminDashboard from "./pages/AdminDashboard";
+import "./App.css";
 
 function App() {
-  const [mode, setMode] = useState('light');
+  const [mode, setMode] = useState("light");
   const colorMode = useMemo(
     () => ({
       toggleColorMode: () => {
-        setMode((prevMode) => (prevMode === 'light' ? 'dark' : 'light'));
+        setMode((prevMode) => (prevMode === "light" ? "dark" : "light"));
       },
     }),
-    [],
+    []
   );
 
   const theme = useMemo(() => getTheme(mode), [mode]);
@@ -53,6 +63,11 @@ function App() {
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/chatbot" element={<ChatbotPage />} />
           </Route>
+          <Route path="/landing" element={<Landing />} />
+          <Route path="/dashboard/sender" element={<SenderDashboard />} />
+          <Route path="/dashboard/receiver" element={<ReceiverDashboard />} />
+          <Route path="/dashboard/courier" element={<CourierDashboard />} />
+          <Route path="/dashboard/admin" element={<AdminDashboard />} />
         </Routes>
       </Router>
     </ThemeProvider>
