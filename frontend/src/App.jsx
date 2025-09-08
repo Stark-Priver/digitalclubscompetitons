@@ -17,7 +17,9 @@ import Analytics from "./pages/Analytics";
 import ChatbotPage from "./pages/ChatbotPage";
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
-import Landing from "./pages/Landing";
+import Features from "./pages/Features";
+import About from "./pages/About";
+import Contact from "./pages/Contact";
 import SenderDashboard from "./pages/SenderDashboard";
 import ReceiverDashboard from "./pages/ReceiverDashboard";
 import CourierDashboard from "./pages/CourierDashboard";
@@ -49,6 +51,9 @@ function App() {
       <Router>
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/features" element={<Features />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/contact" element={<Contact />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route
@@ -63,7 +68,6 @@ function App() {
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/chatbot" element={<ChatbotPage />} />
           </Route>
-          <Route path="/landing" element={<Landing />} />
           <Route path="/dashboard/sender" element={<SenderDashboard />} />
           <Route path="/dashboard/receiver" element={<ReceiverDashboard />} />
           <Route path="/dashboard/courier" element={<CourierDashboard />} />
