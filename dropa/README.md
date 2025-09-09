@@ -46,9 +46,8 @@ This folder contains the Django backend for Dropa: AI-Powered Delivery Intellige
 
 ## ML Integration
 
-- Place trained models in `ml_models/`
+- Place trained models in `src/`
 - Use Django views to load and serve predictions
 
 ---
 
-See `instructions.md` for full system requirements.
