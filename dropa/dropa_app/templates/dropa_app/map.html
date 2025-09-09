@@ -1,0 +1,1082 @@
+{% extends 'dropa_app/base.html' %}
+{% load static %}
+
+{% block page_title %}Live Map{% endblock %}
+
+{% block extra_css %}
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""/>
+{% endblock %}
+
+{% block content %}
+<div class="map-container">
+    <div class="map-sidebar">
+        <div class="sidebar-header">
+            <h3>Live Tracking</h3>
+            <div class="map-stats">
+                <div class="stat-item">
+                    <span class="stat-number">{{ active_packages.count }}</span>
+                    <span class="stat-label">Active Deliveries</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">23</span>
+                    <span class="stat-label">Online Couriers</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="map-filters">
+            <h4>Filters</h4>
+            <div class="filter-group">
+                <label class="filter-checkbox">
+                    <input type="checkbox" id="showActive" checked>
+                    <span class="checkmark"></span>
+                    <span class="filter-icon active"></span>
+                    Active Deliveries
+                </label>
+                <label class="filter-checkbox">
+                    <input type="checkbox" id="showPending" checked>
+                    <span class="checkmark"></span>
+                    <span class="filter-icon pending"></span>
+                    Pending Pickups
+                </label>
+                <label class="filter-checkbox">
+                    <input type="checkbox" id="showCompleted">
+                    <span class="checkmark"></span>
+                    <span class="filter-icon completed"></span>
+                    Completed Today
+                </label>
+                <label class="filter-checkbox">
+                    <input type="checkbox" id="showCouriers" checked>
+                    <span class="checkmark"></span>
+                    <span class="filter-icon courier"></span>
+                    Courier Locations
+                </label>
+            </div>
+        </div>
+        
+        <div class="active-deliveries">
+            <h4>Active Deliveries</h4>
+            <div class="delivery-list">
+                {% for package in active_packages %}
+                <div class="delivery-item" data-package-id="{{ package.order_id }}">
+                    <div class="delivery-info">
+                        <div class="package-id">#{{ package.order_id }}</div>
+                        <div class="delivery-route">
+                            <span class="from">{{ package.from_city_name }}</span>
+                            <i class="fas fa-arrow-right"></i>
+                            <span class="to">Destination</span>
+                        </div>
+                        <div class="courier-name">
+                            {% if package.delivery_user %}
+                                {{ package.delivery_user.username }}
+                            {% else %}
+                                Unassigned
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="delivery-actions">
+                        <button class="btn-sm" onclick="focusOnPackage('{{ package.order_id }}')">
+                            <i class="fas fa-map-marker-alt"></i>
+                        </button>
+                        <button class="btn-sm" onclick="contactCourier('{{ package.delivery_user.id }}')">
+                            <i class="fas fa-phone"></i>
+                        </button>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="no-deliveries">
+                    <i class="fas fa-box-open"></i>
+                    <p>No active deliveries</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <div class="map-controls">
+            <button class="control-btn" onclick="refreshMap()">
+                <i class="fas fa-sync-alt"></i>
+                Refresh
+            </button>
+            <button class="control-btn" onclick="centerMap()">
+                <i class="fas fa-crosshairs"></i>
+                Center
+            </button>
+            <button class="control-btn" onclick="toggleFullscreen()">
+                <i class="fas fa-expand"></i>
+                Fullscreen
+            </button>
+        </div>
+    </div>
+    
+    <div class="map-main">
+        <div class="map-header">
+            <div class="header-left">
+                <h2>Real-time Delivery Map</h2>
+                <div class="last-updated">
+                    Last updated: <span id="lastUpdated">Just now</span>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button class="btn btn-secondary" onclick="exportMapData()">
+                    <i class="fas fa-download"></i>
+                    Export Data
+                </button>
+                <button class="btn btn-primary" onclick="addGeofence()">
+                    <i class="fas fa-draw-polygon"></i>
+                    Add Zone
+                </button>
+            </div>
+        </div>
+        
+        <div id="deliveryMap" class="interactive-map">
+            <!-- Leaflet map will be initialized here -->
+        </div>
+        
+        <div class="map-legend">
+            <div class="legend-item">
+                <span class="legend-marker active"></span>
+                <span>Active Delivery</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-marker pending"></span>
+                <span>Pending Pickup</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-marker courier"></span>
+                <span>Available Courier</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-marker completed"></span>
+                <span>Completed</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.map-container {
+    display: flex;
+    height: calc(100vh - 140px);
+    background: white;
+    border-radius: 1rem;
+    border: 1px solid #e2e8f0;
+    overflow: hidden;
+}
+
+.map-sidebar {
+    width: 350px;
+    background: #f8fafc;
+    border-right: 1px solid #e2e8f0;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.sidebar-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.sidebar-header h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 1rem;
+}
+
+.map-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.stat-item {
+    text-align: center;
+    padding: 1rem;
+    background: white;
+    border-radius: 0.5rem;
+    border: 1px solid #e2e8f0;
+}
+
+.stat-number {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #3b82f6;
+}
+
+.stat-label {
+    font-size: 0.75rem;
+    color: #64748b;
+    text-transform: uppercase;
+}
+
+.map-filters {
+    padding: 1.5rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.map-filters h4 {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 1rem;
+    text-transform: uppercase;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.filter-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 0.375rem;
+    transition: all 0.2s;
+}
+
+.filter-checkbox:hover {
+    background: rgba(255, 255, 255, 0.8);
+}
+
+.filter-checkbox input[type="checkbox"] {
+    display: none;
+}
+
+.checkmark {
+    width: 16px;
+    height: 16px;
+    border: 2px solid #cbd5e1;
+    border-radius: 3px;
+    position: relative;
+    transition: all 0.2s;
+}
+
+.filter-checkbox input[type="checkbox"]:checked + .checkmark {
+    background: #3b82f6;
+    border-color: #3b82f6;
+}
+
+.filter-checkbox input[type="checkbox"]:checked + .checkmark::after {
+    content: '✓';
+    position: absolute;
+    top: -2px;
+    left: 2px;
+    color: white;
+    font-size: 12px;
+}
+
+.filter-icon {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.filter-icon.active {
+    background: #10b981;
+}
+
+.filter-icon.pending {
+    background: #f59e0b;
+}
+
+.filter-icon.completed {
+    background: #3b82f6;
+}
+
+.filter-icon.courier {
+    background: #8b5cf6;
+}
+
+.active-deliveries {
+    flex: 1;
+    padding: 1.5rem;
+    overflow-y: auto;
+}
+
+.active-deliveries h4 {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 1rem;
+    text-transform: uppercase;
+}
+
+.delivery-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.delivery-item {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.delivery-item:hover {
+    border-color: #3b82f6;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+}
+
+.delivery-info {
+    flex: 1;
+}
+
+.package-id {
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 0.25rem;
+}
+
+.delivery-route {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: #64748b;
+    margin-bottom: 0.25rem;
+}
+
+.delivery-route i {
+    font-size: 0.75rem;
+}
+
+.courier-name {
+    font-size: 0.75rem;
+    color: #94a3b8;
+}
+
+.delivery-actions {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.btn-sm {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: #f1f5f9;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+    font-size: 0.75rem;
+    transition: all 0.2s;
+}
+
+.btn-sm:hover {
+    background: #e2e8f0;
+    color: #374151;
+}
+
+.no-deliveries {
+    text-align: center;
+    padding: 2rem;
+    color: #94a3b8;
+}
+
+.no-deliveries i {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+    display: block;
+}
+
+.map-controls {
+    padding: 1.5rem;
+    border-top: 1px solid #e2e8f0;
+    display: flex;
+    gap: 0.5rem;
+}
+
+.control-btn {
+    flex: 1;
+    padding: 0.75rem;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+    color: #64748b;
+    transition: all 0.2s;
+}
+
+.control-btn:hover {
+    background: #f8fafc;
+    color: #374151;
+}
+
+.map-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.map-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.map-header h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 0.25rem;
+}
+
+.last-updated {
+    font-size: 0.875rem;
+    color: #64748b;
+}
+
+.header-actions {
+    display: flex;
+    gap: 1rem;
+}
+
+.interactive-map {
+    flex: 1;
+    position: relative;
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+#deliveryMap {
+    width: 100%;
+    height: 100%;
+    min-height: 500px;
+}
+
+/* Custom Leaflet marker styles */
+.custom-marker {
+    background: transparent;
+    border: none;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    color: white;
+    font-size: 1rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transition: all 0.3s;
+}
+
+.custom-marker.active {
+    background: #10b981;
+    animation: pulse-green 2s infinite;
+}
+
+.custom-marker.pending {
+    background: #f59e0b;
+    animation: pulse-yellow 2s infinite;
+}
+
+.custom-marker.courier {
+    background: #8b5cf6;
+}
+
+.custom-marker.completed {
+    background: #3b82f6;
+}
+
+.custom-marker:hover {
+    transform: scale(1.2);
+}
+
+/* Leaflet popup customization */
+.leaflet-popup-content-wrapper {
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+}
+
+.leaflet-popup-tip {
+    background: rgba(0, 0, 0, 0.9);
+}
+
+.marker-popup-content {
+    padding: 0.5rem;
+    line-height: 1.4;
+}
+
+.marker-popup-content strong {
+    color: #60a5fa;
+}
+
+/* Hide default leaflet marker class */
+.custom-leaflet-marker {
+    background: transparent !important;
+    border: none !important;
+}
+
+/* Animated route styling */
+.animated-route {
+    animation: dash 2s linear infinite;
+}
+
+@keyframes dash {
+    to {
+        stroke-dashoffset: -20;
+    }
+}
+
+.map-legend {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+}
+
+.legend-item:last-child {
+    margin-bottom: 0;
+}
+
+.legend-marker {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.legend-marker.active {
+    background: #10b981;
+}
+
+.legend-marker.pending {
+    background: #f59e0b;
+}
+
+.legend-marker.courier {
+    background: #8b5cf6;
+}
+
+.legend-marker.completed {
+    background: #3b82f6;
+}
+
+@keyframes pulse-green {
+    0%, 100% { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 0 0 0 rgba(16, 185, 129, 0.7); }
+    50% { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 0 0 15px rgba(16, 185, 129, 0); }
+}
+
+@keyframes pulse-yellow {
+    0%, 100% { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 0 0 0 rgba(245, 158, 11, 0.7); }
+    50% { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 0 0 15px rgba(245, 158, 11, 0); }
+}
+
+@media (max-width: 1024px) {
+    .map-container {
+        flex-direction: column;
+        height: auto;
+    }
+    
+    .map-sidebar {
+        width: 100%;
+        max-height: 300px;
+    }
+    
+    .interactive-map {
+        height: 500px;
+    }
+}
+
+@media (max-width: 768px) {
+    .map-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+    
+    .header-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+    
+    .map-stats {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Leaflet JavaScript -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin=""></script>
+
+<script>
+let map;
+let markers = {};
+let deliveryRoutes = {};
+let markerLayers = {
+    active: L.layerGroup(),
+    pending: L.layerGroup(),
+    completed: L.layerGroup(),
+    couriers: L.layerGroup()
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+    initializeLeafletMap();
+    setupMapFilters();
+    startAutoUpdate();
+    loadDeliveryData();
+});
+
+function initializeLeafletMap() {
+    // Initialize Leaflet map centered on Tanzania (approximate center)
+    map = L.map('deliveryMap').setView([-6.369028, 34.888822], 7);
+    
+    // Add OpenStreetMap tile layer
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19
+    }).addTo(map);
+    
+    // Add all marker layers to map
+    Object.values(markerLayers).forEach(layer => {
+        layer.addTo(map);
+    });
+    
+    // Add sample markers
+    addSampleMarkers();
+    
+    updateLastUpdated();
+    console.log('Leaflet map initialized');
+}
+
+function addSampleMarkers() {
+    // Sample delivery locations in Tanzania
+    const sampleData = [
+        {
+            id: 'DR001',
+            type: 'active',
+            position: [-6.7924, 39.2083], // Dar es Salaam
+            title: 'Package #DR001',
+            description: 'Courier: Michael Johnson<br>ETA: 15 minutes<br>Status: In Transit',
+            courier: 'Michael Johnson'
+        },
+        {
+            id: 'DR002',
+            type: 'completed',
+            position: [-6.8, 39.3], // Near Dar es Salaam
+            title: 'Package #DR002',
+            description: 'Delivered successfully<br>Time: 2:45 PM<br>Courier: Sarah Williams',
+            courier: 'Sarah Williams'
+        },
+        {
+            id: 'DR003',
+            type: 'pending',
+            position: [-3.3869, 36.6830], // Arusha
+            title: 'Package #DR003',
+            description: 'Awaiting pickup<br>Scheduled: 3:00 PM<br>Priority: High',
+            courier: null
+        },
+        {
+            id: 'C001',
+            type: 'couriers',
+            position: [-6.8235, 39.2695], // Dar es Salaam area
+            title: 'Sarah Williams',
+            description: 'Status: Available<br>Last active: 2 min ago<br>Rating: 4.8/5',
+            courier: 'Sarah Williams'
+        },
+        {
+            id: 'C002',
+            type: 'couriers',
+            position: [-5.0893, 39.0982], // Tanga
+            title: 'James Mwanga',
+            description: 'Status: On Break<br>Available in: 30 min<br>Rating: 4.6/5',
+            courier: 'James Mwanga'
+        }
+    ];
+    
+    sampleData.forEach(item => {
+        addMarkerToMap(item);
+    });
+    
+    // Add sample route for active delivery
+    addDeliveryRoute('DR001', [
+        [-6.7924, 39.2083], // Start
+        [-6.8100, 39.2400], // Waypoint
+        [-6.8300, 39.2600]  // Destination
+    ]);
+}
+
+function addMarkerToMap(data) {
+    const iconClass = getMarkerIconClass(data.type);
+    const iconHtml = getMarkerIconHtml(data.type);
+    
+    // Create custom marker icon
+    const customIcon = L.divIcon({
+        html: `<div class="custom-marker ${iconClass}">${iconHtml}</div>`,
+        className: 'custom-leaflet-marker',
+        iconSize: [40, 40],
+        iconAnchor: [20, 20],
+        popupAnchor: [0, -20]
+    });
+    
+    // Create marker
+    const marker = L.marker(data.position, { icon: customIcon })
+        .bindPopup(`
+            <div class="marker-popup-content">
+                <strong>${data.title}</strong><br>
+                ${data.description}
+            </div>
+        `)
+        .on('mouseover', function(e) {
+            this.openPopup();
+        });
+    
+    // Add to appropriate layer
+    const layerType = data.type === 'couriers' ? 'couriers' : data.type;
+    marker.addTo(markerLayers[layerType]);
+    
+    // Store marker reference
+    markers[data.id] = {
+        marker: marker,
+        type: data.type,
+        data: data
+    };
+}
+
+function getMarkerIconClass(type) {
+    const classMap = {
+        'active': 'active',
+        'pending': 'pending',
+        'completed': 'completed',
+        'couriers': 'courier'
+    };
+    return classMap[type] || 'active';
+}
+
+function getMarkerIconHtml(type) {
+    const iconMap = {
+        'active': '<i class="fas fa-truck"></i>',
+        'pending': '<i class="fas fa-box"></i>',
+        'completed': '<i class="fas fa-check"></i>',
+        'couriers': '<i class="fas fa-user"></i>'
+    };
+    return iconMap[type] || '<i class="fas fa-truck"></i>';
+}
+
+function addDeliveryRoute(packageId, coordinates) {
+    // Create animated route line
+    const route = L.polyline(coordinates, {
+        color: '#3b82f6',
+        weight: 4,
+        opacity: 0.8,
+        dashArray: '10, 10',
+        className: 'animated-route'
+    }).addTo(map);
+    
+    deliveryRoutes[packageId] = route;
+    
+    // Animate the route
+    animateRoute(route);
+}
+
+function animateRoute(polyline) {
+    // Simple animation by adjusting dash offset
+    let offset = 0;
+    const animate = () => {
+        offset += 2;
+        polyline.getElement().style.strokeDashoffset = offset;
+        requestAnimationFrame(animate);
+    };
+    animate();
+}
+
+function setupMapFilters() {
+    const filters = ['showActive', 'showPending', 'showCompleted', 'showCouriers'];
+    
+    filters.forEach(filterId => {
+        const checkbox = document.getElementById(filterId);
+        if (checkbox) {
+            checkbox.addEventListener('change', updateMapFilters);
+        }
+    });
+}
+
+function updateMapFilters() {
+    const filters = {
+        showActive: document.getElementById('showActive').checked,
+        showPending: document.getElementById('showPending').checked,
+        showCompleted: document.getElementById('showCompleted').checked,
+        showCouriers: document.getElementById('showCouriers').checked
+    };
+    
+    // Toggle layer visibility based on filters
+    if (filters.showActive) {
+        map.addLayer(markerLayers.active);
+    } else {
+        map.removeLayer(markerLayers.active);
+    }
+    
+    if (filters.showPending) {
+        map.addLayer(markerLayers.pending);
+    } else {
+        map.removeLayer(markerLayers.pending);
+    }
+    
+    if (filters.showCompleted) {
+        map.addLayer(markerLayers.completed);
+    } else {
+        map.removeLayer(markerLayers.completed);
+    }
+    
+    if (filters.showCouriers) {
+        map.addLayer(markerLayers.couriers);
+    } else {
+        map.removeLayer(markerLayers.couriers);
+    }
+}
+
+function focusOnPackage(packageId) {
+    console.log('Focusing on package:', packageId);
+    
+    if (markers[packageId]) {
+        const marker = markers[packageId].marker;
+        const position = marker.getLatLng();
+        
+        // Pan to marker and zoom in
+        map.setView(position, 12, { animate: true });
+        
+        // Open popup
+        marker.openPopup();
+        
+        // Highlight effect
+        const markerElement = marker.getElement();
+        if (markerElement) {
+            markerElement.style.transform = 'scale(1.5)';
+            markerElement.style.zIndex = '1000';
+            
+            setTimeout(() => {
+                markerElement.style.transform = 'scale(1)';
+                markerElement.style.zIndex = 'auto';
+            }, 2000);
+        }
+    }
+}
+
+function contactCourier(courierId) {
+    console.log('Contacting courier:', courierId);
+    showNotification('Contacting courier...', 'info');
+}
+
+function refreshMap() {
+    console.log('Refreshing map data...');
+    loadDeliveryData();
+    updateLastUpdated();
+    showNotification('Map refreshed', 'success');
+}
+
+function centerMap() {
+    console.log('Centering map...');
+    map.setView([-6.369028, 34.888822], 7, { animate: true });
+    showNotification('Map centered', 'info');
+}
+
+function toggleFullscreen() {
+    const mapContainer = document.querySelector('.map-container');
+    if (document.fullscreenElement) {
+        document.exitFullscreen().then(() => {
+            // Invalidate map size after exiting fullscreen
+            setTimeout(() => map.invalidateSize(), 100);
+        });
+    } else {
+        mapContainer.requestFullscreen().then(() => {
+            // Invalidate map size after entering fullscreen
+            setTimeout(() => map.invalidateSize(), 100);
+        });
+    }
+}
+
+function exportMapData() {
+    console.log('Exporting map data...');
+    showNotification('Exporting map data...', 'info');
+    
+    // Collect all marker data
+    const exportData = {
+        markers: Object.values(markers).map(m => ({
+            id: m.data.id,
+            type: m.data.type,
+            position: m.marker.getLatLng(),
+            title: m.data.title,
+            courier: m.data.courier
+        })),
+        routes: Object.keys(deliveryRoutes),
+        timestamp: new Date().toISOString()
+    };
+    
+    // Create and download JSON file
+    const dataStr = JSON.stringify(exportData, null, 2);
+    const dataBlob = new Blob([dataStr], {type: 'application/json'});
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `map-data-${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    
+    setTimeout(() => {
+        showNotification('Map data exported successfully!', 'success');
+    }, 2000);
+}
+
+function addGeofence() {
+    console.log('Adding geofence zone...');
+    showNotification('Click on the map to create a new zone', 'info');
+    
+    // Enable drawing mode (simplified)
+    map.on('click', function(e) {
+        const center = e.latlng;
+        const radius = 1000; // 1km radius
+        
+        const geofence = L.circle(center, {
+            radius: radius,
+            color: '#ff6b6b',
+            fillColor: '#ff6b6b',
+            fillOpacity: 0.2,
+            weight: 2
+        }).addTo(map);
+        
+        geofence.bindPopup(`
+            <div>
+                <strong>Geofence Zone</strong><br>
+                Radius: ${radius}m<br>
+                <button onclick="removeGeofence()" class="btn btn-sm btn-danger">Remove</button>
+            </div>
+        `);
+        
+        showNotification('Geofence zone created!', 'success');
+        
+        // Remove click listener
+        map.off('click');
+    });
+}
+
+function loadDeliveryData() {
+    // Simulate loading real delivery data
+    console.log('Loading delivery data from API...');
+    
+    // In a real implementation, this would fetch from your Django API
+    // fetch('/api/map-data/')
+    //     .then(response => response.json())
+    //     .then(data => updateMarkersFromAPI(data))
+    //     .catch(error => console.error('Error loading map data:', error));
+}
+
+function startAutoUpdate() {
+    setInterval(() => {
+        updateLastUpdated();
+        simulateMarkerMovements();
+    }, 30000); // Update every 30 seconds
+}
+
+function updateLastUpdated() {
+    const lastUpdated = document.getElementById('lastUpdated');
+    if (lastUpdated) {
+        lastUpdated.textContent = new Date().toLocaleTimeString();
+    }
+}
+
+function simulateMarkerMovements() {
+    // Simulate real-time movement for active deliveries
+    Object.values(markers).forEach(markerObj => {
+        if (markerObj.type === 'active') {
+            const marker = markerObj.marker;
+            const currentPos = marker.getLatLng();
+            
+            // Small random movement
+            const newLat = currentPos.lat + (Math.random() - 0.5) * 0.001;
+            const newLng = currentPos.lng + (Math.random() - 0.5) * 0.001;
+            
+            marker.setLatLng([newLat, newLng]);
+            
+            // Update route if exists
+            const packageId = markerObj.data.id;
+            if (deliveryRoutes[packageId]) {
+                // Update route end point
+                const route = deliveryRoutes[packageId];
+                const currentRoute = route.getLatLngs();
+                currentRoute[currentRoute.length - 1] = [newLat, newLng];
+                route.setLatLngs(currentRoute);
+            }
+        }
+    });
+}
+
+// Delivery item click handlers
+document.addEventListener('click', function(e) {
+    if (e.target.closest('.delivery-item')) {
+        const packageId = e.target.closest('.delivery-item').dataset.packageId;
+        focusOnPackage(packageId);
+    }
+});
+
+// Add notification function if not already available
+function showNotification(message, type) {
+    // Implementation should match your main notification system
+    console.log(`${type.toUpperCase()}: ${message}`);
+    
+    // Create simple notification
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.textContent = message;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
+        color: white;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        z-index: 10000;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.remove();
+    }, 3000);
+}
+</script>
+{% endblock %}

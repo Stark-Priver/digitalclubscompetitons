@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>
+      {% block title %}Dropa - Delivery Management System{% endblock %}
+    </title>
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="{% static 'dropa_app/css/dashboard.css' %}" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+    />
+
+    {% block extra_css %}{% endblock %}
+  </head>
+  <body>
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <i class="fas fa-shipping-fast"></i>
+          <span>Dropa</span>
+        </div>
+        <button class="sidebar-toggle" id="sidebarToggle">
+          <i class="fas fa-bars"></i>
+        </button>
+      </div>
+
+      <nav class="sidebar-nav">
+        <ul>
+          <li>
+            <a
+              href="{% url 'dashboard' %}"
+              class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}"
+            >
+              <i class="fas fa-tachometer-alt"></i>
+              <span>Dashboard</span>
+            </a>
+          </li>
+          <li>
+            <a
+              href="{% url 'packages' %}"
+              class="nav-link {% if request.resolver_match.url_name == 'packages' %}active{% endif %}"
+            >
+              <i class="fas fa-box"></i>
+              <span>Packages</span>
+            </a>
+          </li>
+          <li>
+            <a
+              href="{% url 'couriers' %}"
+              class="nav-link {% if request.resolver_match.url_name == 'couriers' %}active{% endif %}"
+            >
+              <i class="fas fa-users"></i>
+              <span>Couriers</span>
+            </a>
+          </li>
+          <li>
+            <a
+              href="{% url 'analytics' %}"
+              class="nav-link {% if request.resolver_match.url_name == 'analytics' %}active{% endif %}"
+            >
+              <i class="fas fa-chart-line"></i>
+              <span>Analytics</span>
+            </a>
+          </li>
+          <li>
+            <a
+              href="{% url 'map_view' %}"
+              class="nav-link {% if request.resolver_match.url_name == 'map_view' %}active{% endif %}"
+            >
+              <i class="fas fa-map-marked-alt"></i>
+              <span>Live Map</span>
+            </a>
+          </li>
+          <li>
+            <a
+              href="{% url 'chatbot' %}"
+              class="nav-link {% if request.resolver_match.url_name == 'chatbot' %}active{% endif %}"
+            >
+              <i class="fas fa-robot"></i>
+              <span>DropaBot</span>
+            </a>
+          </li>
+        </ul>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-info">
+          <div class="user-avatar">
+            <i class="fas fa-user"></i>
+          </div>
+          <div class="user-details">
+            <span class="user-name">{{ user.username|default:"Admin" }}</span>
+            <span class="user-role"
+              >{{ user.role|default:"Administrator" }}</span
+            >
+          </div>
+        </div>
+        <a href="{% url 'logout' %}" class="logout-btn">
+          <i class="fas fa-sign-out-alt"></i>
+        </a>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content" id="mainContent">
+      <!-- Header -->
+      <header class="header">
+        <div class="header-left">
+          <button class="mobile-toggle" id="mobileToggle">
+            <i class="fas fa-bars"></i>
+          </button>
+          <h1 class="page-title">
+            {% block page_title %}Dashboard{% endblock %}
+          </h1>
+        </div>
+
+        <div class="header-right">
+          <div class="search-box">
+            <i class="fas fa-search"></i>
+            <input
+              type="text"
+              placeholder="Search packages, couriers..."
+              id="globalSearch"
+            />
+          </div>
+
+          <div class="header-actions">
+            <button class="notification-btn" id="notificationBtn">
+              <i class="fas fa-bell"></i>
+              <span class="notification-badge">3</span>
+            </button>
+
+            <div class="user-menu">
+              <button class="user-menu-btn" id="userMenuBtn">
+                <div class="user-avatar-small">
+                  <i class="fas fa-user"></i>
+                </div>
+                <i class="fas fa-chevron-down"></i>
+              </button>
+
+              <div class="user-dropdown" id="userDropdown">
+                <a href="#"><i class="fas fa-user-cog"></i> Profile</a>
+                <a href="#"><i class="fas fa-cog"></i> Settings</a>
+                <hr />
+                <a href="{% url 'logout' %}"
+                  ><i class="fas fa-sign-out-alt"></i> Logout</a
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Page Content -->
+      <main class="page-content">
+        {% if messages %}
+        <div class="messages">
+          {% for message in messages %}
+          <div class="alert alert-{{ message.tags }}">
+            <i class="fas fa-info-circle"></i>
+            {{ message }}
+            <button class="alert-close">&times;</button>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %} {% block content %}{% endblock %}
+      </main>
+    </div>
+
+    <!-- Notification Panel -->
+    <div class="notification-panel" id="notificationPanel">
+      <div class="notification-header">
+        <h3>Notifications</h3>
+        <button class="close-panel" id="closeNotifications">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="notification-list">
+        <div class="notification-item unread">
+          <div class="notification-icon">
+            <i class="fas fa-exclamation-triangle text-warning"></i>
+          </div>
+          <div class="notification-content">
+            <h4>Delivery Delay Alert</h4>
+            <p>Package #DR123 is running 30 minutes behind schedule</p>
+            <span class="notification-time">5 minutes ago</span>
+          </div>
+        </div>
+        <div class="notification-item">
+          <div class="notification-icon">
+            <i class="fas fa-check-circle text-success"></i>
+          </div>
+          <div class="notification-content">
+            <h4>Delivery Completed</h4>
+            <p>Package #DR122 successfully delivered to customer</p>
+            <span class="notification-time">15 minutes ago</span>
+          </div>
+        </div>
+        <div class="notification-item">
+          <div class="notification-icon">
+            <i class="fas fa-user-plus text-info"></i>
+          </div>
+          <div class="notification-content">
+            <h4>New Courier Added</h4>
+            <p>John Doe has been registered as a new courier</p>
+            <span class="notification-time">1 hour ago</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Overlay -->
+    <div class="overlay" id="overlay"></div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="{% static 'dropa_app/js/dashboard.js' %}"></script>
+
+    {% block extra_js %}{% endblock %}
+  </body>
+</html>

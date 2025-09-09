@@ -1,0 +1,11 @@
+django
+djangorestframework
+psycopg2-binary
+pyotp
+pandas
+numpy
+scikit-learn
+prophet
+joblib
+lightgbm
+xgboost

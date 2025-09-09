@@ -1,0 +1,515 @@
+{% extends 'dropa_app/base.html' %}
+{% load static %}
+
+{% block page_title %}Couriers{% endblock %}
+
+{% block content %}
+<div class="couriers-header">
+    <div class="header-left">
+        <h2>Courier Management</h2>
+        <p>Manage delivery personnel and their performance</p>
+    </div>
+    <div class="header-actions">
+        <button class="btn btn-primary" onclick="openAddCourierModal()">
+            <i class="fas fa-user-plus"></i>
+            Add Courier
+        </button>
+        <button class="btn btn-secondary" onclick="exportCouriers()">
+            <i class="fas fa-download"></i>
+            Export
+        </button>
+    </div>
+</div>
+
+<div class="couriers-stats">
+    <div class="stat-card">
+        <div class="stat-icon">
+            <i class="fas fa-users"></i>
+        </div>
+        <div class="stat-content">
+            <h3>{{ couriers.count }}</h3>
+            <p>Total Couriers</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">
+            <i class="fas fa-user-check"></i>
+        </div>
+        <div class="stat-content">
+            <h3 id="activeCouriers">0</h3>
+            <p>Active Today</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">
+            <i class="fas fa-shipping-fast"></i>
+        </div>
+        <div class="stat-content">
+            <h3 id="totalDeliveries">0</h3>
+            <p>Total Deliveries</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">
+            <i class="fas fa-star"></i>
+        </div>
+        <div class="stat-content">
+            <h3>4.8</h3>
+            <p>Average Rating</p>
+        </div>
+    </div>
+</div>
+
+<div class="couriers-grid">
+    {% for courier in couriers %}
+    <div class="courier-card">
+        <div class="courier-header">
+            <div class="courier-avatar">
+                <img src="{% static 'dropa_app/img/courier-default.jpg' %}" alt="Courier" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <div class="avatar-fallback">
+                    <i class="fas fa-user"></i>
+                </div>
+            </div>
+            <div class="courier-info">
+                <h3>{{ courier.get_full_name|default:courier.username }}</h3>
+                <p class="courier-id">#COU{{ courier.id|stringformat:"03d" }}</p>
+                <span class="courier-status {% if courier.is_active %}online{% else %}offline{% endif %}">
+                    {% if courier.is_active %}Online{% else %}Offline{% endif %}
+                </span>
+            </div>
+            <div class="courier-actions">
+                <button class="btn-icon" onclick="viewCourier({{ courier.id }})" title="View Details">
+                    <i class="fas fa-eye"></i>
+                </button>
+                <button class="btn-icon" onclick="editCourier({{ courier.id }})" title="Edit Courier">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn-icon" onclick="contactCourier({{ courier.id }})" title="Contact">
+                    <i class="fas fa-phone"></i>
+                </button>
+            </div>
+        </div>
+        
+        <div class="courier-stats">
+            <div class="stat-item">
+                <i class="fas fa-box"></i>
+                <div>
+                    <span class="stat-value">{{ courier.deliveries.count }}</span>
+                    <span class="stat-label">Deliveries</span>
+                </div>
+            </div>
+            <div class="stat-item">
+                <i class="fas fa-star"></i>
+                <div>
+                    <span class="stat-value">4.8</span>
+                    <span class="stat-label">Rating</span>
+                </div>
+            </div>
+            <div class="stat-item">
+                <i class="fas fa-clock"></i>
+                <div>
+                    <span class="stat-value">98%</span>
+                    <span class="stat-label">On Time</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="courier-performance">
+            <h4>Recent Performance</h4>
+            <div class="performance-chart">
+                <canvas id="courierChart{{ courier.id }}" height="100"></canvas>
+            </div>
+        </div>
+        
+        <div class="courier-footer">
+            <button class="btn btn-sm btn-primary" onclick="assignPackage({{ courier.id }})">
+                <i class="fas fa-plus"></i>
+                Assign Package
+            </button>
+            <button class="btn btn-sm btn-secondary" onclick="viewLocation({{ courier.id }})">
+                <i class="fas fa-map-marker-alt"></i>
+                View Location
+            </button>
+        </div>
+    </div>
+    {% empty %}
+    <div class="no-couriers">
+        <div class="no-data-content">
+            <i class="fas fa-users"></i>
+            <h3>No couriers found</h3>
+            <p>Start by adding your first courier</p>
+            <button class="btn btn-primary" onclick="openAddCourierModal()">
+                <i class="fas fa-user-plus"></i>
+                Add Courier
+            </button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Add Courier Modal -->
+<div class="modal" id="addCourierModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Add New Courier</h3>
+            <button class="modal-close" onclick="closeModal('addCourierModal')">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <form id="addCourierForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="firstName">First Name</label>
+                        <input type="text" id="firstName" name="firstName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="lastName">Last Name</label>
+                        <input type="text" id="lastName" name="lastName" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" name="email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="phone">Phone Number</label>
+                        <input type="tel" id="phone" name="phone" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="vehicleType">Vehicle Type</label>
+                        <select id="vehicleType" name="vehicleType" required>
+                            <option value="">Select vehicle</option>
+                            <option value="bike">Motorcycle</option>
+                            <option value="car">Car</option>
+                            <option value="van">Van</option>
+                            <option value="truck">Truck</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="licenseNumber">License Number</label>
+                        <input type="text" id="licenseNumber" name="licenseNumber" required>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('addCourierModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Courier</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+.couriers-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2rem;
+}
+
+.header-left h2 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 0.25rem;
+}
+
+.header-left p {
+    color: #64748b;
+    margin: 0;
+}
+
+.header-actions {
+    display: flex;
+    gap: 1rem;
+}
+
+.couriers-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.couriers-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 1.5rem;
+}
+
+.courier-card {
+    background: white;
+    border-radius: 1rem;
+    border: 1px solid #e2e8f0;
+    padding: 1.5rem;
+    transition: all 0.2s;
+}
+
+.courier-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+.courier-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.courier-avatar {
+    position: relative;
+    width: 60px;
+    height: 60px;
+}
+
+.courier-avatar img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.avatar-fallback {
+    width: 100%;
+    height: 100%;
+    background: #f1f5f9;
+    border-radius: 50%;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+    font-size: 1.5rem;
+}
+
+.courier-info {
+    flex: 1;
+}
+
+.courier-info h3 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 0.25rem;
+}
+
+.courier-id {
+    color: #64748b;
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
+}
+
+.courier-status {
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.courier-status.online {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.courier-status.offline {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.courier-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.courier-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: #f8fafc;
+    border-radius: 0.5rem;
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.stat-item i {
+    width: 32px;
+    height: 32px;
+    background: #3b82f6;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.875rem;
+}
+
+.stat-value {
+    font-weight: 600;
+    color: #1e293b;
+    display: block;
+}
+
+.stat-label {
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+.courier-performance {
+    margin-bottom: 1.5rem;
+}
+
+.courier-performance h4 {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 0.75rem;
+}
+
+.performance-chart {
+    height: 100px;
+    background: #f8fafc;
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #94a3b8;
+}
+
+.courier-footer {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.courier-footer .btn {
+    flex: 1;
+}
+
+.btn-sm {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+}
+
+.no-couriers {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 3rem;
+}
+
+.no-data-content i {
+    font-size: 3rem;
+    color: #d1d5db;
+    margin-bottom: 1rem;
+}
+
+.no-data-content h3 {
+    color: #374151;
+    margin-bottom: 0.5rem;
+}
+
+.no-data-content p {
+    color: #6b7280;
+    margin-bottom: 1.5rem;
+}
+
+@media (max-width: 768px) {
+    .couriers-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+    
+    .header-actions {
+        width: 100%;
+    }
+    
+    .header-actions .btn {
+        flex: 1;
+    }
+    
+    .couriers-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .courier-stats {
+        grid-template-columns: 1fr;
+    }
+    
+    .courier-footer {
+        flex-direction: column;
+    }
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Courier management functions
+function viewCourier(courierId) {
+    console.log('Viewing courier:', courierId);
+    // Implement courier view modal
+}
+
+function editCourier(courierId) {
+    console.log('Editing courier:', courierId);
+    // Implement courier edit modal
+}
+
+function contactCourier(courierId) {
+    console.log('Contacting courier:', courierId);
+    // Implement contact functionality
+}
+
+function assignPackage(courierId) {
+    console.log('Assigning package to courier:', courierId);
+    // Implement package assignment
+}
+
+function viewLocation(courierId) {
+    console.log('Viewing location for courier:', courierId);
+    // Redirect to map with courier location
+    window.location.href = `/map/?courier=${courierId}`;
+}
+
+function exportCouriers() {
+    console.log('Exporting couriers');
+    // Implement export functionality
+}
+
+window.openAddCourierModal = function() {
+    openModal('addCourierModal');
+};
+
+// Form submission
+document.addEventListener('DOMContentLoaded', function() {
+    const addCourierForm = document.getElementById('addCourierForm');
+    if (addCourierForm) {
+        addCourierForm.addEventListener('submit', handleAddCourier);
+    }
+});
+
+function handleAddCourier(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    const courierData = Object.fromEntries(formData.entries());
+    
+    console.log('Adding courier:', courierData);
+    // Implement courier creation
+    
+    closeModal('addCourierModal');
+    showNotification('Courier added successfully!', 'success');
+}
+</script>
+{% endblock %}
