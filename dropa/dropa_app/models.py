@@ -299,23 +299,9 @@ class DashboardFeedback(models.Model):
     def __str__(self):
         return f"Feedback from {self.user.username} - {self.feedback_type}"
 
-class DeliveryRoute(models.Model):
-    """Track detailed route information for deliveries"""
-    package = models.OneToOneField(Package, on_delete=models.CASCADE, related_name='route')
-    route_points = models.JSONField(default=list, help_text="List of GPS coordinates for the route")
-    estimated_distance_km = models.FloatField(null=True, blank=True)
-    actual_distance_km = models.FloatField(null=True, blank=True)
-    estimated_duration_minutes = models.FloatField(null=True, blank=True)
-    traffic_conditions = models.CharField(max_length=20, choices=[
-        ('light', 'Light'),
-        ('moderate', 'Moderate'),
-        ('heavy', 'Heavy'),
-        ('severe', 'Severe')
-    ], default='moderate')
-    created_at = models.DateTimeField(auto_now_add=True)
-    
-    def __str__(self):
-        return f"Route for {self.package.order_id}"
+# Note: A duplicate, simpler version of the DeliveryRoute model was removed
+# from this location to resolve a naming conflict. The more detailed
+# DeliveryRoute model is defined below.
 
 class PerformanceMetrics(models.Model):
     """Store daily performance metrics for analytics"""

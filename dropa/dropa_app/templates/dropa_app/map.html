@@ -676,68 +676,47 @@ function initializeLeafletMap() {
         layer.addTo(map);
     });
     
-    // Add sample markers
-    addSampleMarkers();
+    // Load data from Django context
+    loadDataFromContext();
     
     updateLastUpdated();
     console.log('Leaflet map initialized');
 }
 
-function addSampleMarkers() {
-    // Sample delivery locations in Tanzania
-    const sampleData = [
+function loadDataFromContext() {
+    const packages = [
+        {% for package in packages %}
         {
-            id: 'DR001',
-            type: 'active',
-            position: [-6.7924, 39.2083], // Dar es Salaam
-            title: 'Package #DR001',
-            description: 'Courier: Michael Johnson<br>ETA: 15 minutes<br>Status: In Transit',
-            courier: 'Michael Johnson'
+            id: '{{ package.order_id }}',
+            type: '{{ package.status }}',
+            position: [{{ package.poi_lat }}, {{ package.poi_lng }}],
+            title: 'Package #{{ package.order_id }}',
+            description: 'Courier: {% if package.delivery_user %}{{ package.delivery_user.username }}{% else %}Unassigned{% endif %}<br>Status: {{ package.status|capfirst }}',
+            courier: '{% if package.delivery_user %}{{ package.delivery_user.username }}{% endif %}'
         },
-        {
-            id: 'DR002',
-            type: 'completed',
-            position: [-6.8, 39.3], // Near Dar es Salaam
-            title: 'Package #DR002',
-            description: 'Delivered successfully<br>Time: 2:45 PM<br>Courier: Sarah Williams',
-            courier: 'Sarah Williams'
-        },
-        {
-            id: 'DR003',
-            type: 'pending',
-            position: [-3.3869, 36.6830], // Arusha
-            title: 'Package #DR003',
-            description: 'Awaiting pickup<br>Scheduled: 3:00 PM<br>Priority: High',
-            courier: null
-        },
-        {
-            id: 'C001',
-            type: 'couriers',
-            position: [-6.8235, 39.2695], // Dar es Salaam area
-            title: 'Sarah Williams',
-            description: 'Status: Available<br>Last active: 2 min ago<br>Rating: 4.8/5',
-            courier: 'Sarah Williams'
-        },
-        {
-            id: 'C002',
-            type: 'couriers',
-            position: [-5.0893, 39.0982], // Tanga
-            title: 'James Mwanga',
-            description: 'Status: On Break<br>Available in: 30 min<br>Rating: 4.6/5',
-            courier: 'James Mwanga'
-        }
+        {% endfor %}
     ];
-    
-    sampleData.forEach(item => {
+
+    const couriers = [
+        {% for courier in couriers %}
+        {
+            id: 'C{{ courier.id }}',
+            type: 'couriers',
+            position: [{{ courier.last_location_lat|default:-6.7924 }}, {{ courier.last_location_lng|default:39.2083 }}],
+            title: '{{ courier.username }}',
+            description: 'Status: {% if courier.is_online %}Available{% else %}Offline{% endif %}<br>Last active: {{ courier.last_active|date:"M d, Y H:i" }}<br>Rating: {{ courier.rating }}/5',
+            courier: '{{ courier.username }}'
+        },
+        {% endfor %}
+    ];
+
+    packages.forEach(item => {
         addMarkerToMap(item);
     });
-    
-    // Add sample route for active delivery
-    addDeliveryRoute('DR001', [
-        [-6.7924, 39.2083], // Start
-        [-6.8100, 39.2400], // Waypoint
-        [-6.8300, 39.2600]  // Destination
-    ]);
+
+    couriers.forEach(item => {
+        addMarkerToMap(item);
+    });
 }
 
 function addMarkerToMap(data) {

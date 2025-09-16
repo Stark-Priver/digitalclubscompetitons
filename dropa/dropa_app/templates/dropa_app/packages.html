@@ -127,6 +127,13 @@
             >
               <i class="fas fa-edit"></i>
             </button>
+            <button
+              class="btn-icon"
+              onclick="openPickupModal('{{ package.order_id }}')"
+              title="Pickup Package"
+            >
+              <i class="fas fa-hand-holding-box"></i>
+            </button>
           </div>
         </td>
       </tr>
@@ -453,7 +460,122 @@
   }
 </style>
 {% endblock %} {% block extra_js %}
+<div id="pickupModal" class="modal">
+  <div class="modal-content">
+    <span class="close" onclick="closePickupModal()">&times;</span>
+    <h2>Package Pickup</h2>
+    <p>Package ID: <span id="pickupPackageId"></span></p>
+    <div id="otp-generation">
+      <button class="btn btn-primary" onclick="generateOTP()">Generate OTP</button>
+      <div id="otp-display" style="display: none;">
+        <p>Your OTP is: <strong id="otpCode"></strong></p>
+      </div>
+    </div>
+    <div id="otp-verification" style="display: none;">
+      <input type="text" id="otpInput" placeholder="Enter OTP" />
+      <button class="btn btn-primary" onclick="verifyOTP()">Verify OTP</button>
+    </div>
+    <div id="pickup-status"></div>
+  </div>
+</div>
+
+<style>
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background-color: rgba(0,0,0,0.4);
+}
+
+.modal-content {
+  background-color: #fefefe;
+  margin: 15% auto;
+  padding: 20px;
+  border: 1px solid #888;
+  width: 80%;
+  max-width: 500px;
+  border-radius: 1rem;
+  text-align: center;
+}
+
+.close {
+  color: #aaa;
+  float: right;
+  font-size: 28px;
+  font-weight: bold;
+}
+
+.close:hover,
+.close:focus {
+  color: black;
+  text-decoration: none;
+  cursor: pointer;
+}
+</style>
+
 <script>
+  function openPickupModal(packageId) {
+    document.getElementById('pickupPackageId').innerText = packageId;
+    document.getElementById('pickupModal').style.display = 'block';
+    document.getElementById('otp-generation').style.display = 'block';
+    document.getElementById('otp-verification').style.display = 'none';
+    document.getElementById('otp-display').style.display = 'none';
+    document.getElementById('pickup-status').innerText = '';
+  }
+
+  function closePickupModal() {
+    document.getElementById('pickupModal').style.display = 'none';
+  }
+
+  function generateOTP() {
+    const packageId = document.getElementById('pickupPackageId').innerText;
+    fetch('/api/otp/send/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': '{{ csrf_token }}'
+      },
+      body: JSON.stringify({ package_id: packageId })
+    })
+    .then(response => response.json())
+    .then(data => {
+      document.getElementById('otpCode').innerText = data.otp;
+      document.getElementById('otp-display').style.display = 'block';
+      document.getElementById('otp-verification').style.display = 'block';
+      document.getElementById('otp-generation').style.display = 'none';
+    });
+  }
+
+  function verifyOTP() {
+    const packageId = document.getElementById('pickupPackageId').innerText;
+    const otpCode = document.getElementById('otpInput').value;
+    fetch('/api/otp/verify/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': '{{ csrf_token }}'
+      },
+      body: JSON.stringify({ package_id: packageId, otp_code: otpCode })
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.verified) {
+        document.getElementById('pickup-status').innerText = 'Package picked up successfully!';
+        document.getElementById('pickup-status').style.color = 'green';
+        setTimeout(closePickupModal, 2000);
+        location.reload();
+      } else {
+        document.getElementById('pickup-status').innerText = 'Invalid OTP. Please try again.';
+        document.getElementById('pickup-status').style.color = 'red';
+      }
+    });
+  }
+
   // Package management functions
   function viewPackage(packageId) {
     console.log("Viewing package:", packageId);
