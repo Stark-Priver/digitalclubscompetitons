@@ -22,6 +22,7 @@ urlpatterns = [
     path('api/otp/send/', views.SendOTPView.as_view(), name='api_otp_send'),
     path('api/otp/verify/', views.VerifyOTPView.as_view(), name='api_otp_verify'),
     path('api/chatbot/', views.DropaBotView.as_view(), name='api_chatbot'),
+    path('register/', views.register_view, name='register'),
     path('api/packages/', views.PackageListView.as_view(), name='api_packages'),
     path('api/couriers/', views.CourierStatsView.as_view(), name='api_couriers'),
     path('api/stats/', views.DashboardStatsView.as_view(), name='api_stats'),

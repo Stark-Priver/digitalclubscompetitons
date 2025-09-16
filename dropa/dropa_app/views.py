@@ -58,8 +58,9 @@ def analytics_view(request):
 @login_required
 def map_view(request):
     """Live map view"""
-    active_packages = Package.objects.filter(status='in_transit')
-    return render(request, 'dropa_app/map.html', {'active_packages': active_packages})
+    packages = Package.objects.all()
+    couriers = User.objects.filter(role='courier')
+    return render(request, 'dropa_app/map.html', {'packages': packages, 'couriers': couriers})
 
 @login_required
 def chatbot_view(request):
@@ -162,12 +163,31 @@ class VerifyOTPView(APIView):
     def post(self, request):
         package_id = request.data.get('package_id')
         otp_code = request.data.get('otp_code')
-        otp_log = OTPLog.objects.filter(package_id=package_id, otp_code=otp_code).first()
-        if otp_log:
-            otp_log.verified = True
-            otp_log.save()
-            return Response({'verified': True}, status=status.HTTP_200_OK)
-        return Response({'verified': False}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            package = Package.objects.get(order_id=package_id)
+            otp_log = OTPLog.objects.filter(package=package, otp_code=otp_code).first()
+            if otp_log and not otp_log.verified:
+                # Verify the OTP
+                totp = pyotp.TOTP(pyotp.random_base32())
+                if totp.verify(otp_code, valid_window=6):
+                    otp_log.verified = True
+                    otp_log.verified_at = timezone.now()
+                    otp_log.save()
+
+                    # Update package status
+                    package.status = 'picked_up'
+                    package.receipt_time = timezone.now()
+                    package.save()
+
+                    return Response({'verified': True}, status=status.HTTP_200_OK)
+                else:
+                    otp_log.attempts += 1
+                    otp_log.save()
+                    return Response({'verified': False, 'error': 'Invalid OTP'}, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                return Response({'verified': False, 'error': 'OTP already used or does not exist'}, status=status.HTTP_400_BAD_REQUEST)
+        except Package.DoesNotExist:
+            return Response({'verified': False, 'error': 'Package not found'}, status=status.HTTP_404_NOT_FOUND)
 
 class DropaBotView(APIView):
     def post(self, request):
@@ -379,22 +399,24 @@ class DeliveryInsightsView(APIView):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-class CourierStatsView(APIView):
-    def get(self, request):
-        # Return courier stats
-        return Response({'stats': 'Courier stats'}, status=status.HTTP_200_OK)
+def register_view(request):
+    """User registration view"""
+    if request.method == 'POST':
+        username = request.POST.get('username')
+        email = request.POST.get('email')
+        password = request.POST.get('password')
+        password_confirm = request.POST.get('password_confirm')
+        role = request.POST.get('role')
 
-class DashboardView(APIView):
-    def get(self, request):
-        # Return dashboard data
-        return Response({'dashboard': 'Dashboard data'}, status=status.HTTP_200_OK)
+        if password != password_confirm:
+            return render(request, 'dropa_app/register.html', {'error': 'Passwords do not match'})
 
-class LoginView(APIView):
-    def post(self, request):
-        # Implement login logic
-        return Response({'login': 'User logged in'}, status=status.HTTP_200_OK)
+        if User.objects.filter(username=username).exists():
+            return render(request, 'dropa_app/register.html', {'error': 'Username already exists'})
 
-class RegisterView(APIView):
-    def post(self, request):
-        # Implement registration logic
-        return Response({'register': 'User registered'}, status=status.HTTP_201_CREATED)
+        user = User.objects.create_user(username=username, email=email, password=password, role=role)
+        user.save()
+        login(request, user)
+        return redirect('dashboard')
+
+    return render(request, 'dropa_app/register.html')
